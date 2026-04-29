@@ -9,7 +9,9 @@
       "Bash(mv c:/Users/Young/pbr-lab/src/assets/model/f-texture.png c:/Users/Young/pbr-lab/public/assets/model/f-texture.png)",
       "Bash(mv c:/Users/Young/pbr-lab/src/assets/sky/env.hdr c:/Users/Young/pbr-lab/public/assets/sky/env.hdr)",
       "Bash(npm uninstall *)",
-      "Bash(npm run *)"
+      "Bash(npm run *)",
+      "Bash(git add *)",
+      "Bash(git commit *)"
     ]
   }
 }
