@@ -17,6 +17,8 @@ import { Object as SceneObject } from './scene/Object.ts';
 import { Camera }               from './scene/Camera.ts';
 import { Skybox }               from './scene/Skybox.ts';
 
+const BASE_URL = import.meta.env.BASE_URL;
+
 export class Renderer {
   private readonly canvas:          HTMLCanvasElement;
   private readonly SAMPLE_COUNT   = 4;
@@ -97,7 +99,7 @@ export class Renderer {
 
   private async _bakeIBL(): Promise<void> {
     const CUBE_SIZE = 2048;
-    const equirect  = await Texture.fromHDR(this.device, '/assets/sky/env.hdr');
+    const equirect  = await Texture.fromHDR(this.device, `${BASE_URL}assets/sky/env.hdr`);
 
     const CUBE_MIP_COUNT = Math.log2(CUBE_SIZE) + 1;
     this._cubemapTex = this.device.createTexture({
@@ -322,11 +324,11 @@ export class Renderer {
 
     // Sphere
     const sphereMat = new Material(this.device, scenePipeline);
-    sphereMat.setAlbedo(   await Texture.from(this.device, '/assets/model/color.png'));
-    sphereMat.setNormal(   await Texture.from(this.device, '/assets/model/normal.png',    false));
-    sphereMat.setMetallic( await Texture.from(this.device, '/assets/model/metallic.png',  false));
-    sphereMat.setRoughness(await Texture.from(this.device, '/assets/model/roughness.png', false));
-    sphereMat.setHeight(   await Texture.from(this.device, '/assets/model/height.png',    false));
+    sphereMat.setAlbedo(   await Texture.from(this.device, `${BASE_URL}assets/model/color.png`));
+    sphereMat.setNormal(   await Texture.from(this.device, `${BASE_URL}assets/model/normal.png`,    false));
+    sphereMat.setMetallic( await Texture.from(this.device, `${BASE_URL}assets/model/metallic.png`,  false));
+    sphereMat.setRoughness(await Texture.from(this.device, `${BASE_URL}assets/model/roughness.png`, false));
+    sphereMat.setHeight(   await Texture.from(this.device, `${BASE_URL}assets/model/height.png`,    false));
     sphereMat.setHeightScale(0.02);
     this.sphere = new SceneObject(MeshGenerator.createSphere(this.device), sphereMat, this.device, this.frameUniformBuffer);
 
