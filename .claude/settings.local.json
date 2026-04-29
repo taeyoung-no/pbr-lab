@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install *)",
+      "Bash(npx tsc *)",
+      "Bash(node -e \"const m = require\\('@loaders.gl/images'\\); console.log\\(Object.keys\\(m\\).filter\\(k => /hdr|HDR/i.test\\(k\\)\\)\\)\")",
+      "Bash(xxd src/assets/sky/env.hdr)",
+      "Bash(mkdir -p c:/Users/Young/pbr-lab/public/assets/model c:/Users/Young/pbr-lab/public/assets/sky)",
+      "Bash(mv c:/Users/Young/pbr-lab/src/assets/model/f-texture.png c:/Users/Young/pbr-lab/public/assets/model/f-texture.png)",
+      "Bash(mv c:/Users/Young/pbr-lab/src/assets/sky/env.hdr c:/Users/Young/pbr-lab/public/assets/sky/env.hdr)",
+      "Bash(npm uninstall *)",
+      "Bash(npm run *)"
+    ]
+  }
+}
