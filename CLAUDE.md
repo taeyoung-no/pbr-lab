@@ -19,7 +19,7 @@ Do not add new libraries unless the user explicitly requests them.
 ```bash
 npm run dev      # start Vite dev server
 npm run build    # tsc + Vite production build
-npm run preview  # serve production build locally
+npm run preview  # serve production build locally (base = /pbr-lab/)
 ```
 
 ## Project Structure
@@ -27,6 +27,10 @@ npm run preview  # serve production build locally
 ```
 pbr-lab/
 ├── index.html              # fullscreen <canvas id="canvas">, inline reset CSS
+├── vite.config.ts          # base: '/pbr-lab/' for GitHub Pages
+├── .github/
+│   └── workflows/
+│       └── deploy.yml      # GitHub Actions: build → upload-pages-artifact → deploy-pages
 ├── src/
 │   ├── main.ts             # entry point; creates Renderer, init() → lil-gui setup → start()
 │   ├── Renderer.ts         # all WebGPU logic: IBL bake passes, scene setup, render loop; exposes `params` for GUI
@@ -56,6 +60,11 @@ pbr-lab/
 ```
 
 ## Code Conventions
+
+### Asset URLs
+- Public assets (in `public/`) must be referenced with `BASE_URL` prefix, not hardcoded absolute paths.
+- `Renderer.ts` declares `const BASE_URL = import.meta.env.BASE_URL;` at module scope and uses `` `${BASE_URL}assets/...` `` for all fetch calls.
+- In dev (`npm run dev`) `BASE_URL` is `/`; in production / `preview` it is `/pbr-lab/`.
 
 ### WGSL Shaders
 - All shaders live in `src/shaders/` as `.wgsl` files.
