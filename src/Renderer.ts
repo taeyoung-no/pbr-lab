@@ -4,37 +4,36 @@ import PBR_SHADER    from './shaders/pbr.wgsl?raw';
 import SHADOW_SHADER from './shaders/shadow.wgsl?raw';
 import POST_SHADER   from './shaders/post.wgsl?raw';
 import BLIT_SHADER   from './shaders/blit.wgsl?raw';
-import { MeshGenerator }        from './graphics/MeshGenerator.ts';
-import { VERTEX_BUFFER_LAYOUT } from './graphics/Vertex.ts';
-import { Texture }              from './graphics/Texture.ts';
-import { Material }             from './graphics/Material.ts';
-import { IBLBaker }             from './graphics/IBLBaker.ts';
+import { MeshGenerator }         from './graphics/MeshGenerator.ts';
+import { VERTEX_BUFFER_LAYOUT }  from './graphics/Vertex.ts';
+import { Texture }               from './graphics/Texture.ts';
+import { Material }              from './graphics/Material.ts';
+import { IBLBaker }              from './graphics/IBLBaker.ts';
 import { Object as SceneObject } from './scene/Object.ts';
-import { Camera }               from './scene/Camera.ts';
-import { Skybox }               from './scene/Skybox.ts';
+import { Camera }                from './scene/Camera.ts';
+import { Skybox }                from './scene/Skybox.ts';
 
 const BASE_URL = import.meta.env.BASE_URL;
 
 export class Renderer {
-  private readonly canvas:          HTMLCanvasElement;
-  private readonly SAMPLE_COUNT   = 4;
-  private readonly SHADOW_MAP_SIZE = 2048;
+  private readonly canvas:        HTMLCanvasElement;
+  private readonly sampleCount   = 4;
+  private readonly shadowMapSize = 2048;
 
   private device!:  GPUDevice;
   private context!: GPUCanvasContext;
   private format!:  GPUTextureFormat;
 
-  private camera!:  Camera;
-  private sphere!:  SceneObject;
-  private skybox!:  Skybox;
+  private camera!: Camera;
+  private sphere!: SceneObject;
+  private skybox!: Skybox;
+  private floor!:  SceneObject;
 
   private frameUniformBuffer!: GPUBuffer;
   private iblBindGroup!:       GPUBindGroup;
   private postPipeline!:       GPUComputePipeline;
   private blitPipeline!:       GPURenderPipeline;
   private blitSampler!:        GPUSampler;
-
-  private floor!: SceneObject;
 
   // Recreated on resize
   private depthTexture!:   GPUTexture;
@@ -44,28 +43,29 @@ export class Renderer {
   private postBindGroup!:  GPUBindGroup;
   private blitBindGroup!:  GPUBindGroup;
 
-  private _cubemapTex!:     GPUTexture;
-  private _irradianceTex!:  GPUTexture;
-  private _prefilteredTex!: GPUTexture;
-  private _brdfLut!:        GPUTexture;
+  // IBL textures
+  private cubemapTex!:     GPUTexture;
+  private irradianceTex!:  GPUTexture;
+  private prefilteredTex!: GPUTexture;
+  private brdfLut!:        GPUTexture;
 
   // Shadow pass
-  private _shadowDepthTex!:   GPUTexture;
-  private _shadowPipeline!:   GPURenderPipeline;
-  private _shadowUniformBuf!: GPUBuffer;
-  private _sphereShadowBG!:   GPUBindGroup;
-  private _floorShadowBG!:    GPUBindGroup;
-  private _sceneShadowBG!:    GPUBindGroup;
+  private shadowDepthTex!:   GPUTexture;
+  private shadowPipeline!:   GPURenderPipeline;
+  private shadowUniformBuf!: GPUBuffer;
+  private sphereShadowBG!:   GPUBindGroup;
+  private floorShadowBG!:    GPUBindGroup;
+  private sceneShadowBG!:    GPUBindGroup;
 
   // Shared between update() and render()
-  private _view!: Mat4;
-  private _proj!: Mat4;
+  private view!: Mat4;
+  private proj!: Mat4;
 
   readonly params = {
-    lightDirX:     0.0,
-    lightDirY:    -1.0,
-    lightDirZ:    -1.0,
-    lightIntensity: 5.0,
+    lightDirX:      0.0,
+    lightDirY:     -1.0,
+    lightDirZ:     -1.0,
+    lightIntensity:  5.0,
   };
 
   constructor(canvas: HTMLCanvasElement) {
@@ -82,33 +82,33 @@ export class Renderer {
     this.format  = navigator.gpu.getPreferredCanvasFormat();
     this.camera  = new Camera(this.canvas);
 
-    await this._bakeIBL();
-    await this._buildScene();
-    this._buildShadow();
-    this._buildPipelines();
+    await this.bakeIBL();
+    await this.buildScene();
+    this.buildShadow();
+    this.buildPipelines();
 
-    window.addEventListener('resize', () => this._resize());
-    this._resize();
+    window.addEventListener('resize', () => this.resize());
+    this.resize();
   }
 
   // ── IBL bake ──────────────────────────────────────────────────────────────
 
-  private async _bakeIBL(): Promise<void> {
+  private async bakeIBL(): Promise<void> {
     const baker = new IBLBaker(this.device);
     const ibl   = await baker.bake(`${BASE_URL}assets/sky/env.hdr`);
 
-    this._cubemapTex     = ibl.cubemapTex;
-    this._irradianceTex  = ibl.irradianceTex;
-    this._prefilteredTex = ibl.prefilteredTex;
-    this._brdfLut        = ibl.brdfLut;
+    this.cubemapTex     = ibl.cubemapTex;
+    this.irradianceTex  = ibl.irradianceTex;
+    this.prefilteredTex = ibl.prefilteredTex;
+    this.brdfLut        = ibl.brdfLut;
 
-    this.skybox = new Skybox(this.device, 'rgba16float', this.SAMPLE_COUNT);
-    this.skybox.setCubemap(this._cubemapTex.createView({ dimension: 'cube' }), ibl.cubeSampler);
+    this.skybox = new Skybox(this.device, 'rgba16float', this.sampleCount);
+    this.skybox.setCubemap(this.cubemapTex.createView({ dimension: 'cube' }), ibl.cubeSampler);
   }
 
   // ── Scene setup ───────────────────────────────────────────────────────────
 
-  private async _buildScene(): Promise<void> {
+  private async buildScene(): Promise<void> {
     // FrameUniforms: viewProj(64) + camPos+pad(16) + lightDir+lightIntensity(16) + lightViewProj(64) = 160 bytes
     this.frameUniformBuffer = this.device.createBuffer({
       size:  160,
@@ -129,7 +129,7 @@ export class Renderer {
       },
       primitive:    { topology: 'triangle-list', cullMode: 'back' },
       depthStencil: { format: 'depth24plus', depthWriteEnabled: true, depthCompare: 'less' },
-      multisample:  { count: this.SAMPLE_COUNT },
+      multisample:  { count: this.sampleCount },
     });
 
     const iblSampler = this.device.createSampler({ magFilter: 'linear', minFilter: 'linear', mipmapFilter: 'linear' });
@@ -137,11 +137,11 @@ export class Renderer {
     this.iblBindGroup = this.device.createBindGroup({
       layout:  scenePipeline.getBindGroupLayout(2),
       entries: [
-        { binding: 0, resource: this._irradianceTex.createView({ dimension: 'cube' }) },
+        { binding: 0, resource: this.irradianceTex.createView({ dimension: 'cube' }) },
         { binding: 1, resource: iblSampler },
-        { binding: 2, resource: this._prefilteredTex.createView({ dimension: 'cube' }) },
+        { binding: 2, resource: this.prefilteredTex.createView({ dimension: 'cube' }) },
         { binding: 3, resource: iblSampler },
-        { binding: 4, resource: this._brdfLut.createView() },
+        { binding: 4, resource: this.brdfLut.createView() },
         { binding: 5, resource: lutSampler },
       ],
     });
@@ -167,9 +167,9 @@ export class Renderer {
 
   // ── Shadow pass setup ────────────────────────────────────────────────────
 
-  private _buildShadow(): void {
-    this._shadowDepthTex = this.device.createTexture({
-      size:   [this.SHADOW_MAP_SIZE, this.SHADOW_MAP_SIZE],
+  private buildShadow(): void {
+    this.shadowDepthTex = this.device.createTexture({
+      size:   [this.shadowMapSize, this.shadowMapSize],
       format: 'depth32float',
       usage:  GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
     });
@@ -180,7 +180,7 @@ export class Renderer {
       attributes:  [{ shaderLocation: 0, offset: 0, format: 'float32x3' }],
     };
 
-    this._shadowPipeline = this.device.createRenderPipeline({
+    this.shadowPipeline = this.device.createRenderPipeline({
       layout: 'auto',
       vertex: {
         module:     this.device.createShaderModule({ code: SHADOW_SHADER }),
@@ -192,23 +192,23 @@ export class Renderer {
     });
 
     // lightViewProj uniform buffer (64 bytes)
-    this._shadowUniformBuf = this.device.createBuffer({
+    this.shadowUniformBuf = this.device.createBuffer({
       size:  64,
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
 
-    const shadowBGLayout = this._shadowPipeline.getBindGroupLayout(0);
-    this._sphereShadowBG = this.device.createBindGroup({
+    const shadowBGLayout = this.shadowPipeline.getBindGroupLayout(0);
+    this.sphereShadowBG = this.device.createBindGroup({
       layout:  shadowBGLayout,
       entries: [
-        { binding: 0, resource: { buffer: this._shadowUniformBuf } },
+        { binding: 0, resource: { buffer: this.shadowUniformBuf } },
         { binding: 1, resource: { buffer: this.sphere.objectBuffer } },
       ],
     });
-    this._floorShadowBG = this.device.createBindGroup({
+    this.floorShadowBG = this.device.createBindGroup({
       layout:  shadowBGLayout,
       entries: [
-        { binding: 0, resource: { buffer: this._shadowUniformBuf } },
+        { binding: 0, resource: { buffer: this.shadowUniformBuf } },
         { binding: 1, resource: { buffer: this.floor.objectBuffer } },
       ],
     });
@@ -221,10 +221,10 @@ export class Renderer {
       addressModeU: 'clamp-to-edge',
       addressModeV: 'clamp-to-edge',
     });
-    this._sceneShadowBG = this.device.createBindGroup({
+    this.sceneShadowBG = this.device.createBindGroup({
       layout:  this.sphere.material.pipeline.getBindGroupLayout(3),
       entries: [
-        { binding: 0, resource: this._shadowDepthTex.createView() },
+        { binding: 0, resource: this.shadowDepthTex.createView() },
         { binding: 1, resource: shadowCompareSampler },
       ],
     });
@@ -232,7 +232,7 @@ export class Renderer {
 
   // ── Post / blit pipelines ─────────────────────────────────────────────────
 
-  private _buildPipelines(): void {
+  private buildPipelines(): void {
     this.postPipeline = this.device.createComputePipeline({
       layout:  'auto',
       compute: { module: this.device.createShaderModule({ code: POST_SHADER }), entryPoint: 'cs_main' },
@@ -240,9 +240,9 @@ export class Renderer {
 
     const blitModule = this.device.createShaderModule({ code: BLIT_SHADER });
     this.blitPipeline = this.device.createRenderPipeline({
-      layout:   'auto',
-      vertex:   { module: blitModule, entryPoint: 'vs_main' },
-      fragment: { module: blitModule, entryPoint: 'fs_main', targets: [{ format: this.format }] },
+      layout:    'auto',
+      vertex:    { module: blitModule, entryPoint: 'vs_main' },
+      fragment:  { module: blitModule, entryPoint: 'fs_main', targets: [{ format: this.format }] },
       primitive: { topology: 'triangle-list' },
     });
 
@@ -251,7 +251,7 @@ export class Renderer {
 
   // ── Resize ────────────────────────────────────────────────────────────────
 
-  private _resize(): void {
+  private resize(): void {
     this.canvas.width  = window.innerWidth;
     this.canvas.height = window.innerHeight;
     this.context.configure({ device: this.device, format: this.format, alphaMode: 'premultiplied' });
@@ -264,13 +264,13 @@ export class Renderer {
     this.depthTexture = this.device.createTexture({
       size:        [this.canvas.width, this.canvas.height],
       format:      'depth24plus',
-      sampleCount: this.SAMPLE_COUNT,
+      sampleCount: this.sampleCount,
       usage:       GPUTextureUsage.RENDER_ATTACHMENT,
     });
     this.msaaTexture = this.device.createTexture({
       size:        [this.canvas.width, this.canvas.height],
       format:      'rgba16float',
-      sampleCount: this.SAMPLE_COUNT,
+      sampleCount: this.sampleCount,
       usage:       GPUTextureUsage.RENDER_ATTACHMENT,
     });
     this.resolveTexture = this.device.createTexture({
@@ -306,9 +306,9 @@ export class Renderer {
 
   update(): void {
     const camPos = this.camera.getPosition();
-    this._view   = this.camera.getView();
-    this._proj   = mat4.perspective(Math.PI / 4, this.canvas.width / this.canvas.height, 0.1, 100);
-    const viewProj = mat4.multiply(this._proj, this._view);
+    this.view    = this.camera.getView();
+    this.proj    = mat4.perspective(Math.PI / 4, this.canvas.width / this.canvas.height, 0.1, 100);
+    const viewProj = mat4.multiply(this.proj, this.view);
 
     // Frame uniforms uploaded once per frame (shared by all objects)
     this.device.queue.writeBuffer(this.frameUniformBuffer,  0, viewProj as Float32Array);
@@ -320,44 +320,44 @@ export class Renderer {
     this.device.queue.writeBuffer(this.frameUniformBuffer, 80, new Float32Array([lx, ly, lz, lightIntensity]));
 
     // Light view-projection for shadow mapping (orthographic, from light's position)
-    const lightPos  = [-lx * 20, -ly * 20, -lz * 20];
+    const lightPos    = [-lx * 20, -ly * 20, -lz * 20];
     const lightTarget = [lightPos[0] + lx, lightPos[1] + ly, lightPos[2] + lz];
-    const up = Math.abs(ly) > 0.99 ? [0, 0, 1] : [0, 1, 0];
+    const up          = Math.abs(ly) > 0.99 ? [0, 0, 1] : [0, 1, 0];
     const lightView     = mat4.lookAt(lightPos, lightTarget, up);
     const lightProj     = mat4.ortho(-15, 15, -15, 15, 0.1, 50);
     const lightViewProj = mat4.multiply(lightProj, lightView);
-    this.device.queue.writeBuffer(this._shadowUniformBuf,   0,  lightViewProj as Float32Array);
-    this.device.queue.writeBuffer(this.frameUniformBuffer,  96, lightViewProj as Float32Array);
+    this.device.queue.writeBuffer(this.shadowUniformBuf,   0,  lightViewProj as Float32Array);
+    this.device.queue.writeBuffer(this.frameUniformBuffer, 96, lightViewProj as Float32Array);
   }
 
   render(): void {
     const encoder = this.device.createCommandEncoder();
-    this._shadowPass(encoder);
-    this._scenePass(encoder);
-    this._postPass(encoder);
-    this._blitPass(encoder);
+    this.shadowPass(encoder);
+    this.scenePass(encoder);
+    this.postPass(encoder);
+    this.blitPass(encoder);
     this.device.queue.submit([encoder.finish()]);
   }
 
-  private _shadowPass(encoder: GPUCommandEncoder): void {
+  private shadowPass(encoder: GPUCommandEncoder): void {
     const pass = encoder.beginRenderPass({
       colorAttachments: [],
       depthStencilAttachment: {
-        view:            this._shadowDepthTex.createView(),
+        view:            this.shadowDepthTex.createView(),
         depthClearValue: 1.0,
         depthLoadOp:     'clear',
         depthStoreOp:    'store',
       },
     });
-    pass.setPipeline(this._shadowPipeline);
-    pass.setBindGroup(0, this._sphereShadowBG);
+    pass.setPipeline(this.shadowPipeline);
+    pass.setBindGroup(0, this.sphereShadowBG);
     this.sphere.drawMesh(pass);
-    pass.setBindGroup(0, this._floorShadowBG);
+    pass.setBindGroup(0, this.floorShadowBG);
     this.floor.drawMesh(pass);
     pass.end();
   }
 
-  private _scenePass(encoder: GPUCommandEncoder): void {
+  private scenePass(encoder: GPUCommandEncoder): void {
     const pass = encoder.beginRenderPass({
       colorAttachments: [{
         view:          this.msaaTexture.createView(),
@@ -374,14 +374,14 @@ export class Renderer {
       },
     });
     pass.setBindGroup(2, this.iblBindGroup);
-    pass.setBindGroup(3, this._sceneShadowBG);
+    pass.setBindGroup(3, this.sceneShadowBG);
     this.sphere.draw(pass);
     this.floor.draw(pass);
-    this.skybox.draw(pass, this._view, this._proj);
+    this.skybox.draw(pass, this.view, this.proj);
     pass.end();
   }
 
-  private _postPass(encoder: GPUCommandEncoder): void {
+  private postPass(encoder: GPUCommandEncoder): void {
     const pass = encoder.beginComputePass();
     pass.setPipeline(this.postPipeline);
     pass.setBindGroup(0, this.postBindGroup);
@@ -392,7 +392,7 @@ export class Renderer {
     pass.end();
   }
 
-  private _blitPass(encoder: GPUCommandEncoder): void {
+  private blitPass(encoder: GPUCommandEncoder): void {
     const pass = encoder.beginRenderPass({
       colorAttachments: [{
         view:       this.context.getCurrentTexture().createView(),
@@ -407,13 +407,13 @@ export class Renderer {
     pass.end();
   }
 
-  private _frame(): void {
+  private frame(): void {
     this.update();
     this.render();
-    requestAnimationFrame(() => this._frame());
+    requestAnimationFrame(() => this.frame());
   }
 
   start(): void {
-    requestAnimationFrame(() => this._frame());
+    requestAnimationFrame(() => this.frame());
   }
 }

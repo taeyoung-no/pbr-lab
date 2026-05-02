@@ -1,9 +1,9 @@
-import { Texture }            from './Texture.ts';
-import EQUIRECT_SHADER        from '../shaders/equirect-to-cubemap.wgsl?raw';
-import CUBEMAP_MIP_SHADER     from '../shaders/cubemap-mip.wgsl?raw';
-import IRRADIANCE_SHADER      from '../shaders/cubemap-to-irradiance.wgsl?raw';
-import PREFILTER_SHADER       from '../shaders/cubemap-to-prefilter.wgsl?raw';
-import BRDF_LUT_SHADER        from '../shaders/brdf-lut.wgsl?raw';
+import { Texture }        from './Texture.ts';
+import EQUIRECT_SHADER    from '../shaders/equirect-to-cubemap.wgsl?raw';
+import CUBEMAP_MIP_SHADER from '../shaders/cubemap-mip.wgsl?raw';
+import IRRADIANCE_SHADER  from '../shaders/cubemap-to-irradiance.wgsl?raw';
+import PREFILTER_SHADER   from '../shaders/cubemap-to-prefilter.wgsl?raw';
+import BRDF_LUT_SHADER    from '../shaders/brdf-lut.wgsl?raw';
 
 export interface IBLResult {
   cubemapTex:     GPUTexture;
@@ -54,18 +54,18 @@ export class IBLBaker {
     equirectPass.end();
     this.device.queue.submit([equirectEncoder.finish()]);
 
-    this._generateCubemapMipmaps(cubemapTex);
+    this.generateCubemapMipmaps(cubemapTex);
 
     const cubeSampler = this.device.createSampler({ magFilter: 'linear', minFilter: 'linear', mipmapFilter: 'linear' });
 
-    const irradianceTex  = this._bakeIrradiance(cubemapTex, cubeSampler);
-    const prefilteredTex = this._bakePrefilter(cubemapTex, cubeSampler);
-    const brdfLut        = this._bakeBRDFLut();
+    const irradianceTex  = this.bakeIrradiance(cubemapTex, cubeSampler);
+    const prefilteredTex = this.bakePrefilter(cubemapTex, cubeSampler);
+    const brdfLut        = this.bakeBRDFLut();
 
     return { cubemapTex, irradianceTex, prefilteredTex, brdfLut, cubeSampler };
   }
 
-  private _generateCubemapMipmaps(texture: GPUTexture): void {
+  private generateCubemapMipmaps(texture: GPUTexture): void {
     const pipeline = this.device.createComputePipeline({
       layout:  'auto',
       compute: { module: this.device.createShaderModule({ code: CUBEMAP_MIP_SHADER }), entryPoint: 'cs_main' },
@@ -73,8 +73,8 @@ export class IBLBaker {
     const sampler = this.device.createSampler({ minFilter: 'linear', magFilter: 'linear' });
 
     for (let mip = 1; mip < texture.mipLevelCount; mip++) {
-      const srcView  = texture.createView({ dimension: '2d-array', baseMipLevel: mip - 1, mipLevelCount: 1 });
-      const dstView  = texture.createView({ dimension: '2d-array', baseMipLevel: mip,     mipLevelCount: 1 });
+      const srcView   = texture.createView({ dimension: '2d-array', baseMipLevel: mip - 1, mipLevelCount: 1 });
+      const dstView   = texture.createView({ dimension: '2d-array', baseMipLevel: mip,     mipLevelCount: 1 });
       const bindGroup = this.device.createBindGroup({
         layout:  pipeline.getBindGroupLayout(0),
         entries: [
@@ -96,7 +96,7 @@ export class IBLBaker {
     }
   }
 
-  private _bakeIrradiance(cubemapTex: GPUTexture, cubeSampler: GPUSampler): GPUTexture {
+  private bakeIrradiance(cubemapTex: GPUTexture, cubeSampler: GPUSampler): GPUTexture {
     const IRRADIANCE_SIZE = 32;
     const irradianceTex   = this.device.createTexture({
       size:   [IRRADIANCE_SIZE, IRRADIANCE_SIZE, 6],
@@ -129,7 +129,7 @@ export class IBLBaker {
     return irradianceTex;
   }
 
-  private _bakePrefilter(cubemapTex: GPUTexture, cubeSampler: GPUSampler): GPUTexture {
+  private bakePrefilter(cubemapTex: GPUTexture, cubeSampler: GPUSampler): GPUTexture {
     const PREFILTER_SIZE      = 1024;
     const PREFILTER_MIP_COUNT = 5;
 
@@ -145,10 +145,7 @@ export class IBLBaker {
       compute: { module: this.device.createShaderModule({ code: PREFILTER_SHADER }), entryPoint: 'cs_main' },
     });
 
-    const uniformBuf = this.device.createBuffer({
-      size:  16,
-      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
-    });
+    const uniformBuf  = this.device.createBuffer({ size: 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
     const cubemapView = cubemapTex.createView({ dimension: 'cube' });
 
     for (let mip = 0; mip < PREFILTER_MIP_COUNT; mip++) {
@@ -180,7 +177,7 @@ export class IBLBaker {
     return prefilteredTex;
   }
 
-  private _bakeBRDFLut(): GPUTexture {
+  private bakeBRDFLut(): GPUTexture {
     const LUT_SIZE = 512;
     const brdfLut  = this.device.createTexture({
       size:   [LUT_SIZE, LUT_SIZE],

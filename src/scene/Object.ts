@@ -9,27 +9,27 @@ import type { Material } from '../graphics/Material.ts';
 const OBJECT_BUFFER_SIZE = 96;
 
 export class Object {
-  private readonly _mesh:           Mesh;
-  readonly          material:       Material;
-  private readonly _device:         GPUDevice;
-  private readonly _objectBuffer:   GPUBuffer;
-  private readonly _objectBindGroup: GPUBindGroup;
+  private readonly mesh:           Mesh;
+  readonly          material:      Material;
+  private readonly device:         GPUDevice;
+  private readonly _objectBuffer:  GPUBuffer;
+  private readonly objectBindGroup: GPUBindGroup;
 
   private _position: Vec3 = vec3.create();
   private _rotation: Vec3 = vec3.create();  // Euler angles in degrees, XYZ order
   private _scale:    Vec3 = vec3.fromValues(1, 1, 1);
 
   constructor(mesh: Mesh, material: Material, device: GPUDevice, frameUniformBuffer: GPUBuffer) {
-    this._mesh   = mesh;
+    this.mesh     = mesh;
     this.material = material;
-    this._device  = device;
+    this.device   = device;
 
     this._objectBuffer = device.createBuffer({
       size:  OBJECT_BUFFER_SIZE,
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
 
-    this._objectBindGroup = device.createBindGroup({
+    this.objectBindGroup = device.createBindGroup({
       layout:  material.pipeline.getBindGroupLayout(0),
       entries: [
         { binding: 0, resource: { buffer: frameUniformBuffer } },
@@ -70,18 +70,18 @@ export class Object {
   get objectBuffer(): GPUBuffer { return this._objectBuffer; }
 
   drawMesh(pass: GPURenderPassEncoder): void {
-    this._device.queue.writeBuffer(this._objectBuffer, 0, this.modelMatrix() as Float32Array);
-    this._mesh.draw(pass);
+    this.device.queue.writeBuffer(this._objectBuffer, 0, this.modelMatrix() as Float32Array);
+    this.mesh.draw(pass);
   }
 
   draw(pass: GPURenderPassEncoder): void {
-    pass.setBindGroup(0, this._objectBindGroup);
+    pass.setBindGroup(0, this.objectBindGroup);
     this.material.bind(pass);
     this.drawMesh(pass);
   }
 
   destroy(): void {
-    this._mesh.destroy();
+    this.mesh.destroy();
     this.material.destroy();
     this._objectBuffer.destroy();
   }

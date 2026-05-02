@@ -6,25 +6,25 @@ import { VERTEX_BUFFER_LAYOUT } from '../graphics/Vertex.ts';
 import type { Mesh } from '../graphics/Mesh.ts';
 
 export class Skybox {
-  private readonly _device:           GPUDevice;
-  private readonly _mesh:             Mesh;
-  private readonly _pipeline:         GPURenderPipeline;
-  private readonly _uniformBuffer:    GPUBuffer;
-  private readonly _uniformBindGroup: GPUBindGroup;
-  private _cubemapBindGroup:          GPUBindGroup | null = null;
+  private readonly device:           GPUDevice;
+  private readonly mesh:             Mesh;
+  private readonly pipeline:         GPURenderPipeline;
+  private readonly uniformBuffer:    GPUBuffer;
+  private readonly uniformBindGroup: GPUBindGroup;
+  private cubemapBindGroup:          GPUBindGroup | null = null;
 
   constructor(device: GPUDevice, format: GPUTextureFormat, sampleCount: number = 1) {
-    this._device = device;
-    this._mesh   = MeshGenerator.createCube(device);
+    this.device = device;
+    this.mesh   = MeshGenerator.createCube(device);
 
-    this._uniformBuffer = device.createBuffer({
+    this.uniformBuffer = device.createBuffer({
       size:  64,
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
 
     const module = device.createShaderModule({ code: SHADER });
 
-    this._pipeline = device.createRenderPipeline({
+    this.pipeline = device.createRenderPipeline({
       layout: 'auto',
       vertex: {
         module,
@@ -41,16 +41,16 @@ export class Skybox {
       multisample:  { count: sampleCount },
     });
 
-    this._uniformBindGroup = device.createBindGroup({
-      layout:  this._pipeline.getBindGroupLayout(0),
-      entries: [{ binding: 0, resource: { buffer: this._uniformBuffer } }],
+    this.uniformBindGroup = device.createBindGroup({
+      layout:  this.pipeline.getBindGroupLayout(0),
+      entries: [{ binding: 0, resource: { buffer: this.uniformBuffer } }],
     });
   }
 
   // view must be a cube-dimension view (createView({ dimension: 'cube' })).
   setCubemap(view: GPUTextureView, sampler: GPUSampler): void {
-    this._cubemapBindGroup = this._device.createBindGroup({
-      layout:  this._pipeline.getBindGroupLayout(1),
+    this.cubemapBindGroup = this.device.createBindGroup({
+      layout:  this.pipeline.getBindGroupLayout(1),
       entries: [
         { binding: 0, resource: view },
         { binding: 1, resource: sampler },
@@ -61,26 +61,26 @@ export class Skybox {
   // Render the skybox. Call after all opaque geometry so depth culls unseen skybox fragments.
   // view must NOT have translation stripped — this method handles that internally.
   draw(pass: GPURenderPassEncoder, view: Mat4, proj: Mat4): void {
-    if (!this._cubemapBindGroup) return;
+    if (!this.cubemapBindGroup) return;
 
     const viewNoTrans = mat4.copy(view);
     viewNoTrans[12] = 0;
     viewNoTrans[13] = 0;
     viewNoTrans[14] = 0;
 
-    this._device.queue.writeBuffer(
-      this._uniformBuffer, 0,
+    this.device.queue.writeBuffer(
+      this.uniformBuffer, 0,
       mat4.multiply(proj, viewNoTrans) as Float32Array,
     );
 
-    pass.setPipeline(this._pipeline);
-    pass.setBindGroup(0, this._uniformBindGroup);
-    pass.setBindGroup(1, this._cubemapBindGroup);
-    this._mesh.draw(pass);
+    pass.setPipeline(this.pipeline);
+    pass.setBindGroup(0, this.uniformBindGroup);
+    pass.setBindGroup(1, this.cubemapBindGroup);
+    this.mesh.draw(pass);
   }
 
   destroy(): void {
-    this._mesh.destroy();
-    this._uniformBuffer.destroy();
+    this.mesh.destroy();
+    this.uniformBuffer.destroy();
   }
 }

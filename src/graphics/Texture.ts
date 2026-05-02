@@ -1,10 +1,10 @@
 export class Texture {
-  private readonly _texture: GPUTexture;
-  private readonly _view:    GPUTextureView;
+  private readonly texture: GPUTexture;
+  private readonly _view:   GPUTextureView;
   private readonly _sampler: GPUSampler;
 
   private constructor(texture: GPUTexture, view: GPUTextureView, sampler: GPUSampler) {
-    this._texture = texture;
+    this.texture  = texture;
     this._view    = view;
     this._sampler = sampler;
   }
@@ -137,7 +137,7 @@ export class Texture {
   get sampler(): GPUSampler     { return this._sampler; }
 
   destroy(): void {
-    this._texture.destroy();
+    this.texture.destroy();
   }
 }
 

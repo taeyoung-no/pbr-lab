@@ -2,77 +2,77 @@ import { mat4, vec3 } from 'wgpu-matrix';
 import type { Mat4, Vec3 } from 'wgpu-matrix';
 
 export class Camera {
-  private _radius:    number;
-  private _azimuth:   number;
-  private _elevation: number;
+  private radius:    number;
+  private azimuth:   number;
+  private elevation: number;
 
-  private _width  = 1280;
-  private _height = 720;
+  private width  = 1280;
+  private height = 720;
 
-  private _dragging = false;
-  private _prevX    = 0;
-  private _prevY    = 0;
+  private dragging = false;
+  private prevX    = 0;
+  private prevY    = 0;
 
-  private readonly _canvas: HTMLCanvasElement;
+  private readonly canvas: HTMLCanvasElement;
 
-  private readonly _onPointerDown: (e: PointerEvent) => void;
-  private readonly _onPointerMove: (e: PointerEvent) => void;
-  private readonly _onPointerUp:   (e: PointerEvent) => void;
-  private readonly _onWheel:       (e: WheelEvent)   => void;
+  private readonly onPointerDown: (e: PointerEvent) => void;
+  private readonly onPointerMove: (e: PointerEvent) => void;
+  private readonly onPointerUp:   (e: PointerEvent) => void;
+  private readonly onWheel:       (e: WheelEvent)   => void;
 
   constructor(canvas: HTMLCanvasElement, radius = 5) {
-    this._canvas    = canvas;
-    this._radius    = radius;
-    this._azimuth   = 0;
-    this._elevation = 0.3;
+    this.canvas    = canvas;
+    this.radius    = radius;
+    this.azimuth   = 0;
+    this.elevation = 0.3;
 
-    this._onPointerDown = (e: PointerEvent): void => {
+    this.onPointerDown = (e: PointerEvent): void => {
       if (e.button !== 0) return;
-      this._dragging = true;
-      this._prevX = e.clientX;
-      this._prevY = e.clientY;
-      this._canvas.setPointerCapture(e.pointerId);
+      this.dragging = true;
+      this.prevX = e.clientX;
+      this.prevY = e.clientY;
+      this.canvas.setPointerCapture(e.pointerId);
     };
 
-    this._onPointerMove = (e: PointerEvent): void => {
-      if (!this._dragging) return;
-      this._azimuth   -= (e.clientX - this._prevX) * (Math.PI / this._width);
-      this._elevation += (e.clientY - this._prevY) * (Math.PI / this._height);
-      this._prevX = e.clientX;
-      this._prevY = e.clientY;
+    this.onPointerMove = (e: PointerEvent): void => {
+      if (!this.dragging) return;
+      this.azimuth   -= (e.clientX - this.prevX) * (Math.PI / this.width);
+      this.elevation += (e.clientY - this.prevY) * (Math.PI / this.height);
+      this.prevX = e.clientX;
+      this.prevY = e.clientY;
       const LIMIT = 89 * (Math.PI / 180);
-      this._elevation = Math.max(-LIMIT, Math.min(LIMIT, this._elevation));
+      this.elevation = Math.max(-LIMIT, Math.min(LIMIT, this.elevation));
     };
 
-    this._onPointerUp = (e: PointerEvent): void => {
+    this.onPointerUp = (e: PointerEvent): void => {
       if (e.button !== 0) return;
-      this._dragging = false;
+      this.dragging = false;
     };
 
     // deltaY * 0.005 ≈ 0.5 units per 100px scroll notch, matching GLFW yOffset * 0.5
-    this._onWheel = (e: WheelEvent): void => {
+    this.onWheel = (e: WheelEvent): void => {
       e.preventDefault();
       const delta = e.deltaMode === WheelEvent.DOM_DELTA_PIXEL ? e.deltaY * 0.005 : e.deltaY * 0.5;
-      this._radius = Math.max(3, Math.min(10, this._radius + delta));
+      this.radius = Math.max(3, Math.min(10, this.radius + delta));
     };
 
-    this._canvas.addEventListener('pointerdown', this._onPointerDown);
-    this._canvas.addEventListener('pointermove', this._onPointerMove);
-    this._canvas.addEventListener('pointerup',   this._onPointerUp);
-    this._canvas.addEventListener('wheel',       this._onWheel, { passive: false });
+    this.canvas.addEventListener('pointerdown', this.onPointerDown);
+    this.canvas.addEventListener('pointermove', this.onPointerMove);
+    this.canvas.addEventListener('pointerup',   this.onPointerUp);
+    this.canvas.addEventListener('wheel',       this.onWheel, { passive: false });
   }
 
   setSize(width: number, height: number): void {
-    this._width  = width;
-    this._height = height;
+    this.width  = width;
+    this.height = height;
   }
 
   getPosition(): Vec3 {
-    const cx = Math.cos(this._elevation);
+    const cx = Math.cos(this.elevation);
     return vec3.fromValues(
-      this._radius * cx * Math.sin(this._azimuth),
-      this._radius * Math.sin(this._elevation),
-      this._radius * cx * Math.cos(this._azimuth),
+      this.radius * cx * Math.sin(this.azimuth),
+      this.radius * Math.sin(this.elevation),
+      this.radius * cx * Math.cos(this.azimuth),
     );
   }
 
@@ -85,9 +85,9 @@ export class Camera {
   }
 
   destroy(): void {
-    this._canvas.removeEventListener('pointerdown', this._onPointerDown);
-    this._canvas.removeEventListener('pointermove', this._onPointerMove);
-    this._canvas.removeEventListener('pointerup',   this._onPointerUp);
-    this._canvas.removeEventListener('wheel',       this._onWheel);
+    this.canvas.removeEventListener('pointerdown', this.onPointerDown);
+    this.canvas.removeEventListener('pointermove', this.onPointerMove);
+    this.canvas.removeEventListener('pointerup',   this.onPointerUp);
+    this.canvas.removeEventListener('wheel',       this.onWheel);
   }
 }
