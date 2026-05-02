@@ -332,9 +332,15 @@ export class Renderer {
 
   render(): void {
     const encoder = this.device.createCommandEncoder();
+    this._shadowPass(encoder);
+    this._scenePass(encoder);
+    this._postPass(encoder);
+    this._blitPass(encoder);
+    this.device.queue.submit([encoder.finish()]);
+  }
 
-    // 0. Shadow depth pass — render from light's perspective
-    const shadowPass = encoder.beginRenderPass({
+  private _shadowPass(encoder: GPUCommandEncoder): void {
+    const pass = encoder.beginRenderPass({
       colorAttachments: [],
       depthStencilAttachment: {
         view:            this._shadowDepthTex.createView(),
@@ -343,15 +349,16 @@ export class Renderer {
         depthStoreOp:    'store',
       },
     });
-    shadowPass.setPipeline(this._shadowPipeline);
-    shadowPass.setBindGroup(0, this._sphereShadowBG);
-    this.sphere.drawMesh(shadowPass);
-    shadowPass.setBindGroup(0, this._floorShadowBG);
-    this.floor.drawMesh(shadowPass);
-    shadowPass.end();
+    pass.setPipeline(this._shadowPipeline);
+    pass.setBindGroup(0, this._sphereShadowBG);
+    this.sphere.drawMesh(pass);
+    pass.setBindGroup(0, this._floorShadowBG);
+    this.floor.drawMesh(pass);
+    pass.end();
+  }
 
-    // 1. Scene → MSAA rgba16float, resolve to resolveTexture
-    const scenePass = encoder.beginRenderPass({
+  private _scenePass(encoder: GPUCommandEncoder): void {
+    const pass = encoder.beginRenderPass({
       colorAttachments: [{
         view:          this.msaaTexture.createView(),
         resolveTarget: this.resolveTexture.createView(),
@@ -366,26 +373,27 @@ export class Renderer {
         depthStoreOp:    'store',
       },
     });
-    scenePass.setBindGroup(2, this.iblBindGroup);
-    scenePass.setBindGroup(3, this._sceneShadowBG);
-    this.sphere.draw(scenePass);
-    this.floor.draw(scenePass);
+    pass.setBindGroup(2, this.iblBindGroup);
+    pass.setBindGroup(3, this._sceneShadowBG);
+    this.sphere.draw(pass);
+    this.floor.draw(pass);
+    this.skybox.draw(pass, this._view, this._proj);
+    pass.end();
+  }
 
-    this.skybox.draw(scenePass, this._view, this._proj);
-    scenePass.end();
-
-    // 2. Post compute: resolveTexture → postTexture
-    const postPass = encoder.beginComputePass();
-    postPass.setPipeline(this.postPipeline);
-    postPass.setBindGroup(0, this.postBindGroup);
-    postPass.dispatchWorkgroups(
+  private _postPass(encoder: GPUCommandEncoder): void {
+    const pass = encoder.beginComputePass();
+    pass.setPipeline(this.postPipeline);
+    pass.setBindGroup(0, this.postBindGroup);
+    pass.dispatchWorkgroups(
       Math.ceil(this.canvas.width  / 8),
       Math.ceil(this.canvas.height / 8),
     );
-    postPass.end();
+    pass.end();
+  }
 
-    // 3. Blit: postTexture → canvas
-    const blitPass = encoder.beginRenderPass({
+  private _blitPass(encoder: GPUCommandEncoder): void {
+    const pass = encoder.beginRenderPass({
       colorAttachments: [{
         view:       this.context.getCurrentTexture().createView(),
         clearValue: { r: 0, g: 0, b: 0, a: 1 },
@@ -393,12 +401,10 @@ export class Renderer {
         storeOp:    'store',
       }],
     });
-    blitPass.setPipeline(this.blitPipeline);
-    blitPass.setBindGroup(0, this.blitBindGroup);
-    blitPass.draw(3);
-    blitPass.end();
-
-    this.device.queue.submit([encoder.finish()]);
+    pass.setPipeline(this.blitPipeline);
+    pass.setBindGroup(0, this.blitBindGroup);
+    pass.draw(3);
+    pass.end();
   }
 
   private _frame(): void {
