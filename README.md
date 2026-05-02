@@ -9,6 +9,8 @@ WebGPU renderer exploring physically-based rendering techniques. **[Live demo](h
 - Post-processing via compute shader — ACES tone mapping, gamma correction
 - MSAA with HDR resolve pipeline (rgba16float)
 
+<img width="1920" height="945" alt="pbr" src="https://github.com/user-attachments/assets/207901c3-fb7d-42e1-ae06-7e4b17e04786" />
+
 ---
 
 ## Dependencies
